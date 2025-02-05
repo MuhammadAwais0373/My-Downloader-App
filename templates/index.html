@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Downloader</title>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        h2 {
+            margin-bottom: 1.5rem;
+            font-size: 2rem;
+            color: #ffcc00;
+        }
+
+        input, select, button {
+            width: 100%;
+            padding: 0.75rem;
+            margin: 0.5rem 0;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+            transition: 0.3s;
+        }
+
+        input {
+            background: #222;
+            color: #fff;
+            border: 1px solid #444;
+        }
+
+        button {
+            background: #ffcc00;
+            color: #222;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #ffdb4d;
+        }
+
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .progress-bar {
+            width: 100%;
+            background: #333;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 1rem 0;
+            height: 10px;
+        }
+
+        .progress {
+            width: 0%;
+            height: 100%;
+            background: #ffcc00;
+            transition: width 0.3s ease;
+        }
+
+        #downloadLink {
+            display: none;
+            margin-top: 1rem;
+            color: #ffcc00;
+            text-decoration: none;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>YouTube Video Downloader</h2>
+        <input type="text" id="videoUrl" placeholder="Enter YouTube URL">
+        <button onclick="fetchFormats()">Get Formats</button>
+        <p id="status"></p>
+
+        <table id="formatTable" style="width: 100%; color: #fff; margin: 1rem 0;">
+            <thead>
+                <tr style="background: #444;">
+                    <th>Select</th>
+                    <th>Format</th>
+                    <th>Resolution</th>
+                    <th>Size</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <div class="progress-bar">
+            <div class="progress" id="progress"></div>
+        </div>
+
+        <button onclick="startDownload()">Download Video</button>
+        <button onclick="startAudioDownload()">Download Audio Only</button>
+        <a id="downloadLink" href="#" download>Download File</a>
+    </div>
+
+    <script>
+        let selectedFormat = "";
+        let videoUrl = "";
+
+        function fetchFormats() {
+            videoUrl = document.getElementById("videoUrl").value;
+            let status = document.getElementById("status");
+            let formatTable = document.getElementById("formatTable").getElementsByTagName("tbody")[0];
+
+            if (!videoUrl) {
+                status.innerText = "Please enter a valid URL.";
+                return;
+            }
+
+            status.innerText = "Fetching formats...";
+            formatTable.innerHTML = "";
+            fetch("/get_formats", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: videoUrl })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.formats) {
+                    data.formats.forEach(format => {
+                        let row = formatTable.insertRow();
+                        let selectCell = row.insertCell(0);
+                        let formatCell = row.insertCell(1);
+                        let resolutionCell = row.insertCell(2);
+                        let sizeCell = row.insertCell(3);
+
+                        let radioBtn = document.createElement("input");
+                        radioBtn.type = "radio";
+                        radioBtn.name = "format";
+                        radioBtn.value = format.format_id;
+                        radioBtn.onclick = () => selectedFormat = format.format_id;
+                        selectCell.appendChild(radioBtn);
+
+                        formatCell.innerText = format.ext;
+                        resolutionCell.innerText = format.resolution || "Audio";
+                        sizeCell.innerText = format.filesize ? (format.filesize / 1024 / 1024).toFixed(2) + " MB" : "N/A";
+                    });
+                    status.innerText = "Select a format to download.";
+                } else {
+                    status.innerText = "No formats available.";
+                }
+            })
+            .catch(err => {
+                status.innerText = "Failed to fetch formats.";
+            });
+        }
+
+        function startDownload() {
+            downloadFile("video");
+        }
+
+        function startAudioDownload() {
+            downloadFile("audio");
+        }
+
+        function downloadFile(type) {
+            let status = document.getElementById("status");
+            let progressBar = document.getElementById("progress");
+
+            if (!selectedFormat) {
+                status.innerText = "Please select a format.";
+                return;
+            }
+
+            status.innerText = "Downloading...";
+            progressBar.style.width = "0%";
+
+            fetch("/download", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: videoUrl, format_id: selectedFormat, type: type })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    status.innerText = "Download Complete!";
+                    window.location.href = "/download_file?file=" + encodeURIComponent(data.file);
+                } else {
+                    status.innerText = "Error: " + data.error;
+                }
+            });
+        }
+    </script>
+</body>
+</html>
